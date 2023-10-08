@@ -5,22 +5,19 @@
  *      Author: grzesiek
  */
 
-#include "display.h"
 #include <avr/io.h>
 #include <avr/interrupt.h>
-
-#define OUTPUT_ENABLED (!(PIND & (1<<PD3)))
+#include "display.h"
+#include "output_control.h"
+#include "utils.h"
 
 extern int16_t temperature;
 extern volatile uint8_t timCounter;
 
-enum displayState_t
-{
-	DISPLAY_CURRENT_TEMP,
-	DISPLAY_MISSING_SENSOR
-};
-
 uint8_t displayState;
+uint8_t displayStateCounter;
+
+int16_t temporarySetTemperature;
 
 volatile uint8_t displayBytes[DISPLAY_DIGITS];
 volatile uint8_t currentDigit;
@@ -101,7 +98,7 @@ void displayInit(void)
 	SPDR = 0xFF;
 }
 
-void setNumber(int16_t integer, uint8_t decimalPart)
+void setNumber(int16_t integer, int8_t fractionalPart)
 {
 	// assume 3 digits display
 	if(integer > 99 || integer < -99)
@@ -112,13 +109,14 @@ void setNumber(int16_t integer, uint8_t decimalPart)
 		return;
 	}
 	uint8_t negative = 0;
-	if(integer < 0)
+	if(integer < 0 || fractionalPart < 0)
 	{
 		negative = 1;
 		integer *= -1;
+		fractionalPart *= -1;
 	}
 	int8_t digit1 = integer % 10;
-	displayBytes[2] = segment1DigitValues[decimalPart > 9 ? DISPLAY_UNDERSCORE : decimalPart];
+	displayBytes[2] = segment1DigitValues[fractionalPart > 9 ? DISPLAY_UNDERSCORE : fractionalPart];
 	displayBytes[1] = segment2DigitValues[digit1] & segment2DigitValues[DISPLAY_DOT];
 	integer /= 10;
 	int8_t digit0 = integer != 0 ? integer % 10 : DISPLAY_NOTHING;
@@ -134,24 +132,27 @@ void setNumber(int16_t integer, uint8_t decimalPart)
 	}
 }
 
+static inline void displayTemperature(int16_t temperature)
+{
+	setNumber(temperature / 10, temperature % 10);
+}
+
 void processDisplay(void)
 {
 	if(temperature < -2000)
 	{
-		displayState = DISPLAY_MISSING_SENSOR;
+		if(displayState == DISPLAY_CURRENT_TEMP) displayState = DISPLAY_MISSING_SENSOR;
 	}
 	else
 	{
-		displayState = DISPLAY_CURRENT_TEMP;
+		if(displayState == DISPLAY_MISSING_SENSOR) displayState = DISPLAY_CURRENT_TEMP;
 	}
 
 	switch(displayState)
 	{
 	case DISPLAY_CURRENT_TEMP:
 		{
-			int8_t fractionalPart = temperature % 10;
-			if(fractionalPart < 0) fractionalPart *= -1;
-			setNumber(temperature / 10, fractionalPart);
+			displayTemperature(temperature);
 		}
 		break;
 	case DISPLAY_MISSING_SENSOR:
@@ -168,6 +169,25 @@ void processDisplay(void)
 			displayBytes[2] = segment1DigitValues[DISPLAY_NOTHING];
 		}
 		break;
+	case DISPLAY_SET_TEMPERATURE:
+		{
+			if(!displayStateCounter)
+			{
+				displayState = DISPLAY_CURRENT_TEMP;
+				break;
+			}
+			displayTemperature(temporarySetTemperature);
+
+			if(timCounter < (TIM_SECOND_COUNTER_MAX / 2))
+			{
+				BRIGHTNESS(255 - (timCounter * 14));
+			}
+			else
+			{
+				BRIGHTNESS(255 - ((TIM_SECOND_COUNTER_MAX - timCounter) * 14));
+			}
+		}
+		break;
 	}
 
 	if(OUTPUT_ENABLED)
@@ -177,4 +197,20 @@ void processDisplay(void)
 			displayBytes[2] &= segment1DigitValues[DISPLAY_DOT];
 		}
 	}
+}
+
+void displaySetState(uint8_t state)
+{
+	if(state == DISPLAY_SET_TEMPERATURE && displayState != state)
+	{
+		temporarySetTemperature = eeprom_read_word(&setTemperatureEEMEM);
+	}
+
+	displayState = state;
+	displayStateCounter = 10;
+}
+
+void displaySecondElapsed(void)
+{
+	if(displayStateCounter) displayStateCounter--;
 }

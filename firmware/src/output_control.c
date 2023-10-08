@@ -6,11 +6,8 @@
  */
 
 #include "output_control.h"
-#include <avr/eeprom.h>
 
 #define HYSTERESIS	10
-#define OUTPUT_ON()	PORTD |= (1<<PD3);
-#define OUTPUT_OFF()	PORTD &= ~(1<<PD3);
 
 uint16_t EEMEM setTemperatureEEMEM = 0;
 uint8_t EEMEM controlModeEEMEM = MODE_HEATING;
@@ -27,6 +24,11 @@ void configureMode(uint8_t mode)
 
 void temperatureNotification(int16_t temperature)
 {
+	if(temperature < -2000)
+	{
+		OUTPUT_OFF();
+		return;
+	}
 	int16_t setTemperature = eeprom_read_word(&setTemperatureEEMEM);
 	uint8_t mode = eeprom_read_byte(&controlModeEEMEM);
 

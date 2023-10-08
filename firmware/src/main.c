@@ -11,26 +11,16 @@
 #include "1wire.h"
 #include "display.h"
 #include "output_control.h"
-
-volatile uint8_t received = 0;
+#include "buttons.h"
+#include "utils.h"
 int16_t temperature = 0;
 
 volatile uint8_t timCounter;
 volatile uint8_t seconds = 0;
 
-ISR(USART_RXC_vect)
-{
-	received = UDR;
-}
-
-ISR(USART_TXC_vect)
-{
-
-}
-
 ISR(TIMER0_OVF_vect)
 {
-	if(++timCounter > 30)
+	if(++timCounter > TIM_SECOND_COUNTER_MAX)
 	{
 		seconds++;
 		timCounter = 0;
@@ -41,32 +31,6 @@ void sendByte(uint8_t byte)
 {
 	while (!(UCSRA & (1<<UDRE)));
 	UDR = byte;
-}
-
-void buttonUp(void)
-{
-
-}
-
-void buttonDown(void)
-{
-
-}
-
-void buttonEnter(void)
-{
-
-}
-
-void processButtons(void)
-{
-	switch(received)
-	{
-	case 'w': buttonUp(); break;
-	case 's': buttonDown(); break;
-	case 'z': buttonEnter(); break;
-	}
-	received = 0;
 }
 
 void printTemperature(int16_t value)
@@ -103,6 +67,7 @@ void processTimer(void)
 	static uint16_t prevSeconds;
 	if(prevSeconds != seconds)
 	{
+		displaySecondElapsed();
 		prevSeconds = seconds;
 		sendByte('\r');
 		printTemperature(temperature);
@@ -119,6 +84,8 @@ int main(void)
 	DDRD = (1<<PD1) | (1<<PD2) | (1<<PD3) | (1<<PD6);
 	PORTD = (1<<PD5) | (1<<PD7);
 
+	PORTB = (1<<PB1);
+
 	UBRRH = 0;
 	UBRRL = (unsigned char)51;
 
@@ -128,12 +95,14 @@ int main(void)
 
 	TCCR0 = (1<<CS02) | (1<<CS00);
 
-	TCCR1A = 0;
-	TCCR1B = (1<<CS11); // 8 prescaler = 1 MHz - increment 1us
+	TCCR1A = (1<<WGM10) | (1<<COM1B1) | (1<<COM1B0);
+	TCCR1B = (1<<WGM12) | (1<<CS11) | (1<<CS10);
 
 	TIMSK = (1<<TOIE0);
 
 	SPCR = (1<<SPIE) | (1<<SPE) | (1<<MSTR) | (1<<SPR1) | (1<<SPR0);
+
+	BRIGHTNESS(255);
 
 	sei();
 

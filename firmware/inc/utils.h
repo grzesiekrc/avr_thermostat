@@ -10,6 +10,8 @@
 
 #include <inttypes.h>
 
+#define TIM_SECOND_COUNTER_MAX	30
+
 uint8_t crcUpdate(uint8_t crc, uint8_t data);
 uint8_t calculateCrc8(uint8_t *input, uint8_t size);
 

@@ -18,6 +18,7 @@ uint8_t displayState;
 uint8_t displayStateCounter;
 
 int16_t temporarySetTemperature;
+int16_t temporaryMode;
 
 volatile uint8_t displayBytes[DISPLAY_DIGITS];
 volatile uint8_t currentDigit;
@@ -37,7 +38,8 @@ static const uint8_t segment1DigitValues[] =
 	0x7F, // -
 	0xFE, // DOT
 	0xFF, // NOTHING
-	0xFB // _
+	0xFB, // _
+	0xDF // Upper line
 };
 
 static const uint8_t segment2DigitValues[] =
@@ -55,13 +57,15 @@ static const uint8_t segment2DigitValues[] =
 	0xEF, // -
 	0xFD, // DOT
 	0xFF, // NOTHING
-	0xF7 // _
+	0xF7, // _
+	0xBF // Upper line
 };
 
 #define DISPLAY_MINUS	10
 #define DISPLAY_DOT		11
 #define DISPLAY_NOTHING	12
 #define DISPLAY_UNDERSCORE 13
+#define DISPLAY_UPPERLINE 14
 
 ISR(SPI_STC_vect)
 {
@@ -152,6 +156,7 @@ void processDisplay(void)
 	{
 	case DISPLAY_CURRENT_TEMP:
 		{
+			BRIGHTNESS(255);
 			displayTemperature(temperature);
 		}
 		break;
@@ -180,13 +185,50 @@ void processDisplay(void)
 
 			if(timCounter < (TIM_SECOND_COUNTER_MAX / 2))
 			{
-				BRIGHTNESS(255 - (timCounter * 14));
+				BRIGHTNESS(255 - (timCounter * (TIM_SECOND_COUNTER_MAX / 2 - 1)));
 			}
 			else
 			{
-				BRIGHTNESS(255 - ((TIM_SECOND_COUNTER_MAX - timCounter) * 14));
+				BRIGHTNESS(255 - ((TIM_SECOND_COUNTER_MAX - timCounter) * (TIM_SECOND_COUNTER_MAX / 2 - 1)));
 			}
 		}
+		break;
+	case DISPLAY_SET_MODE:
+		{
+			if(!displayStateCounter)
+			{
+				displayState = DISPLAY_CURRENT_TEMP;
+				break;
+			}
+		}
+		uint8_t dispCounter = temporaryMode == MODE_HEATING ? timCounter : TIM_SECOND_COUNTER_MAX - timCounter;
+		if(dispCounter < (TIM_SECOND_COUNTER_MAX / 4))
+		{
+			displayBytes[0] = segment1DigitValues[DISPLAY_DOT];
+			displayBytes[1] = segment2DigitValues[DISPLAY_DOT];
+			displayBytes[2] = segment1DigitValues[DISPLAY_DOT];
+		}
+		else if(dispCounter >= (TIM_SECOND_COUNTER_MAX / 4) && dispCounter < (TIM_SECOND_COUNTER_MAX / 2))
+		{
+			displayBytes[0] = segment1DigitValues[DISPLAY_UNDERSCORE];
+			displayBytes[1] = segment2DigitValues[DISPLAY_UNDERSCORE];
+			displayBytes[2] = segment1DigitValues[DISPLAY_UNDERSCORE];
+		}
+		else if(dispCounter >= (TIM_SECOND_COUNTER_MAX / 4) && dispCounter < (TIM_SECOND_COUNTER_MAX * 3 / 4))
+		{
+			displayBytes[0] = segment1DigitValues[DISPLAY_MINUS];
+			displayBytes[1] = segment2DigitValues[DISPLAY_MINUS];
+			displayBytes[2] = segment1DigitValues[DISPLAY_MINUS];
+		}
+		else if(dispCounter >= (TIM_SECOND_COUNTER_MAX * 3 / 4))
+		{
+			displayBytes[0] = segment1DigitValues[DISPLAY_UPPERLINE];
+			displayBytes[1] = segment2DigitValues[DISPLAY_UPPERLINE];
+			displayBytes[2] = segment1DigitValues[DISPLAY_UPPERLINE];
+		}
+		break;
+	default:
+		displayState = DISPLAY_CURRENT_TEMP;
 		break;
 	}
 
@@ -204,6 +246,7 @@ void displaySetState(uint8_t state)
 	if(state == DISPLAY_SET_TEMPERATURE && displayState != state)
 	{
 		temporarySetTemperature = eeprom_read_word(&setTemperatureEEMEM);
+		temporaryMode = eeprom_read_byte(&controlModeEEMEM);
 	}
 
 	displayState = state;

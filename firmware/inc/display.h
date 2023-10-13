@@ -31,11 +31,13 @@ enum displayState_t
 {
 	DISPLAY_CURRENT_TEMP,
 	DISPLAY_MISSING_SENSOR,
-	DISPLAY_SET_TEMPERATURE
+	DISPLAY_SET_TEMPERATURE,
+	DISPLAY_SET_MODE
 };
 
 extern uint8_t displayState;
 extern int16_t temporarySetTemperature;
+extern int16_t temporaryMode;
 
 void displaySetState(uint8_t state);
 void displayInit(void);

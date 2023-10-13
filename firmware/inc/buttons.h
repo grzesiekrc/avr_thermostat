@@ -11,8 +11,10 @@
 typedef struct
 {
 	uint16_t counter;
+	int16_t holdCounter;
 	uint8_t actionExecuted;
 	void (*pressAction)(void);
+	void (*holdEvent)(void);
 } button_t;
 
 void processButtons(void);

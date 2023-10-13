@@ -54,4 +54,8 @@ void temperatureNotification(int16_t temperature)
 			OUTPUT_ON();
 		}
 	}
+	else
+	{
+		configureMode(MODE_HEATING);
+	}
 }

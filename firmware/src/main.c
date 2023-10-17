@@ -104,6 +104,8 @@ int main(void)
 
 	BRIGHTNESS(255);
 
+	OUTPUT_OFF();
+
 	sei();
 
 	displayInit();

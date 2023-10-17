@@ -12,6 +12,8 @@
 uint16_t EEMEM setTemperatureEEMEM = 0;
 uint8_t EEMEM controlModeEEMEM = MODE_HEATING;
 
+int16_t previousTemperature = 0;
+
 void configureTemperature(int16_t temperature)
 {
 	eeprom_update_word(&setTemperatureEEMEM, temperature);
@@ -29,6 +31,16 @@ void temperatureNotification(int16_t temperature)
 		OUTPUT_OFF();
 		return;
 	}
+	if(temperature == 850)
+	{
+		int16_t diff = previousTemperature - temperature;
+		if(diff < -HYSTERESIS || diff > HYSTERESIS)
+		{
+			OUTPUT_OFF();
+			return;
+		}
+	}
+	previousTemperature = temperature;
 	int16_t setTemperature = eeprom_read_word(&setTemperatureEEMEM);
 	uint8_t mode = eeprom_read_byte(&controlModeEEMEM);
 
